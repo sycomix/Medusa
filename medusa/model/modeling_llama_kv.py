@@ -637,10 +637,8 @@ class LlamaAttention(nn.Module):
                 self.hidden_size // self.pretraining_tp, dim=1
             )
             attn_output = sum(
-                [
-                    F.linear(attn_output[i], o_proj_slices[i])
-                    for i in range(self.pretraining_tp)
-                ]
+                F.linear(attn_output[i], o_proj_slices[i])
+                for i in range(self.pretraining_tp)
             )
         else:
             attn_output = self.o_proj(attn_output)
@@ -1346,15 +1344,12 @@ class LlamaForSequenceClassification(LlamaPreTrainedModel):
             raise ValueError(
                 "Cannot handle batch sizes > 1 if no padding token is defined."
             )
-        if self.config.pad_token_id is None:
-            sequence_lengths = -1
+        if self.config.pad_token_id is not None and input_ids is not None:
+            sequence_lengths = (
+                torch.ne(input_ids, self.config.pad_token_id).sum(-1) - 1
+            ).to(logits.device)
         else:
-            if input_ids is not None:
-                sequence_lengths = (
-                    torch.ne(input_ids, self.config.pad_token_id).sum(-1) - 1
-                ).to(logits.device)
-            else:
-                sequence_lengths = -1
+            sequence_lengths = -1
 
         pooled_logits = logits[
             torch.arange(batch_size, device=logits.device), sequence_lengths
@@ -1366,9 +1361,7 @@ class LlamaForSequenceClassification(LlamaPreTrainedModel):
             if self.config.problem_type is None:
                 if self.num_labels == 1:
                     self.config.problem_type = "regression"
-                elif self.num_labels > 1 and (
-                    labels.dtype == torch.long or labels.dtype == torch.int
-                ):
+                elif self.num_labels > 1 and labels.dtype in [torch.long, torch.int]:
                     self.config.problem_type = "single_label_classification"
                 else:
                     self.config.problem_type = "multi_label_classification"

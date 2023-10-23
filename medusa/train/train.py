@@ -55,11 +55,7 @@ class CustomizedTrainer(Trainer):
             Union[float, Tuple[float, torch.Tensor]]: The computed loss, optionally with model outputs.
         """
         # DDP will give us model.module
-        if hasattr(model, "module"):
-            medusa = model.module.medusa
-        else:
-            medusa = model.medusa
-
+        medusa = model.module.medusa if hasattr(model, "module") else model.medusa
         logits = model(
             input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"]
         )
@@ -227,11 +223,6 @@ def preprocess(
             cur_len += turn_len
 
         target[cur_len:] = IGNORE_TOKEN_ID
-
-        if False:  # Inspect and check the correctness of masking
-            z = target.clone()
-            z = torch.where(z == IGNORE_TOKEN_ID, tokenizer.unk_token_id, z)
-            rank0_print(tokenizer.decode(z))
 
         if cur_len < tokenizer.model_max_length:
             if cur_len != total_len:

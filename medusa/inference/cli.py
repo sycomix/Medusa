@@ -115,7 +115,7 @@ def main(args):
                     filename = args[1]
 
                 # Add .json if extension not present
-                if not "." in filename:
+                if "." not in filename:
                     filename += ".json"
 
                 print("saving...", filename)
@@ -133,8 +133,8 @@ def main(args):
 
                 # Check if file exists and add .json if needed
                 if not os.path.exists(filename):
-                    if (not filename.endswith(".json")) and os.path.exists(
-                        filename + ".json"
+                    if not filename.endswith(".json") and os.path.exists(
+                        f"{filename}.json"
                     ):
                         filename += ".json"
                     else:

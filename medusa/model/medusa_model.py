@@ -201,10 +201,9 @@ class MedusaModel(nn.Module):
                 orig = self.base_model.lm_head(outputs[0])
         # Clone the output hidden states
         hidden_states = outputs[0].clone()
-        medusa_logits = []
-        # TODO: Consider parallelizing this loop for efficiency?
-        for i in range(self.medusa):
-            medusa_logits.append(self.medusa_head[i](hidden_states))
+        medusa_logits = [
+            self.medusa_head[i](hidden_states) for i in range(self.medusa)
+        ]
         if output_orig:
             return torch.stack(medusa_logits, dim=0), outputs, orig
         return torch.stack(medusa_logits, dim=0)
@@ -280,7 +279,7 @@ class MedusaModel(nn.Module):
         new_token = 0
         last_round_token = 0
 
-        for idx in range(max_steps):
+        for _ in range(max_steps):
             # Generate candidates with topk predictions from Medusa heads
             candidates, tree_candidates = generate_candidates(
                 medusa_logits,

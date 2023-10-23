@@ -53,22 +53,23 @@ def generate_medusa_buffers(medusa_choices, device="cuda"):
             depth_counts.append(0)
         depth_counts[depth - 1] += 1
         prev_depth = depth
-    
+
     # Create the attention mask for Medusa
     medusa_attn_mask = torch.eye(medusa_len, medusa_len)
     medusa_attn_mask[:, 0] = 1
     start = 0
-    for i in range(len(depth_counts)):
-        for j in range(depth_counts[i]):
+    for depth_count in depth_counts:
+        for j in range(depth_count):
             cur_medusa_choice = sorted_medusa_choices[start + j]
             # retrieve ancestor position
             if len(cur_medusa_choice) == 1:
                 continue
-            ancestor_idx = []
-            for c in range(len(cur_medusa_choice) - 1):
-                ancestor_idx.append(sorted_medusa_choices.index(cur_medusa_choice[:c+1]) + 1)
+            ancestor_idx = [
+                sorted_medusa_choices.index(cur_medusa_choice[: c + 1]) + 1
+                for c in range(len(cur_medusa_choice) - 1)
+            ]
             medusa_attn_mask[j + start + 1, ancestor_idx] = 1
-        start += depth_counts[i]
+        start += depth_count
 
     # Generate tree indices for the Medusa structure
     medusa_tree_indices = torch.zeros(medusa_len, dtype=torch.long)
@@ -95,12 +96,11 @@ def generate_medusa_buffers(medusa_choices, device="cuda"):
         retrieve_indice = []
         if cur_medusa_choice in retrieve_paths:
             continue
-        else:
-            for c in range(len(cur_medusa_choice)):
-                retrieve_indice.append(sorted_medusa_choices.index(cur_medusa_choice[:c+1]))
-                retrieve_paths.append(cur_medusa_choice[:c+1])
+        for c in range(len(cur_medusa_choice)):
+            retrieve_indice.append(sorted_medusa_choices.index(cur_medusa_choice[:c+1]))
+            retrieve_paths.append(cur_medusa_choice[:c+1])
         retrieve_indices_nest.append(retrieve_indice)
-    max_length = max([len(x) for x in retrieve_indices_nest])
+    max_length = max(len(x) for x in retrieve_indices_nest)
     retrieve_indices = [pad_path(path, max_length) for path in retrieve_indices_nest]
     retrieve_indices = torch.tensor(retrieve_indices, dtype=torch.long)
     retrieve_indices = retrieve_indices + 1
@@ -113,7 +113,7 @@ def generate_medusa_buffers(medusa_choices, device="cuda"):
         "medusa_position_ids": medusa_position_ids,
         "retrieve_indices": retrieve_indices,
         }
-    
+
     # Move the tensors in the dictionary to the specified device
     medusa_buffers = {
         k: v.clone().to(device)

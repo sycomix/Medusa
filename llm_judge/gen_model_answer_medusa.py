@@ -128,19 +128,14 @@ def run_eval(
 
     # Split the question file into `num_gpus` files
     assert num_gpus_total % num_gpus_per_model == 0
-    use_ray = num_gpus_total // num_gpus_per_model > 1
-
-    if use_ray:
-        get_answers_func = ray.remote(num_gpus=num_gpus_per_model)(
-            get_model_answers
-        ).remote
-    else:
-        get_answers_func = get_model_answers
-
-    chunk_size = len(questions) // (num_gpus_total // num_gpus_per_model) # // 2
-    ans_handles = []
-    for i in range(0, len(questions), chunk_size):
-        ans_handles.append(
+    if use_ray := num_gpus_total // num_gpus_per_model > 1:
+        get_answers_func = (
+            ray.remote(num_gpus=num_gpus_per_model)(get_model_answers).remote
+            if use_ray
+            else get_model_answers
+        )
+        chunk_size = len(questions) // (num_gpus_total // num_gpus_per_model) # // 2
+        ans_handles = [
             get_answers_func(
                 model_path,
                 model_id,
@@ -155,9 +150,8 @@ def run_eval(
                 posterior_alpha,
                 medusa_choices,
             )
-        )
-
-    if use_ray:
+            for i in range(0, len(questions), chunk_size)
+        ]
         ray.get(ans_handles)
 
 
@@ -189,13 +183,13 @@ def get_model_answers(
     )
 
     tokenizer = model.get_tokenizer()
-    
+
     model.eval()
     print('Check model state:',model.training)
-    
+
     cuda_visible_devices = os.environ.get('CUDA_VISIBLE_DEVICES')
     print('CUDA VISIBLE DEVICES:', cuda_visible_devices)
-    
+
     question = questions[0]
 
     # warmup
@@ -236,12 +230,11 @@ def get_model_answers(
                 output_ids = output_ids[0][len(input_ids[0]) :]
                 # be consistent with the template's stop_token_ids
                 if conv.stop_token_ids:
-                    stop_token_ids_index = [
+                    if stop_token_ids_index := [
                         i
                         for i, id in enumerate(output_ids)
                         if id in conv.stop_token_ids
-                    ]
-                    if len(stop_token_ids_index) > 0:
+                    ]:
                         output_ids = output_ids[: stop_token_ids_index[0]]
 
                 output = tokenizer.decode(
@@ -320,12 +313,11 @@ def get_model_answers(
 
                     # be consistent with the template's stop_token_ids
                     if conv.stop_token_ids:
-                        stop_token_ids_index = [
+                        if stop_token_ids_index := [
                             i
                             for i, id in enumerate(output_ids)
                             if id in conv.stop_token_ids
-                        ]
-                        if len(stop_token_ids_index) > 0:
+                        ]:
                             output_ids = output_ids[: stop_token_ids_index[0]]
 
                     output = tokenizer.decode(
@@ -448,7 +440,7 @@ if __name__ == "__main__":
         default=0.09,
         help="The posterior threshold for medusa sampling.",
     )
-    
+
     parser.add_argument(
         "--posterior-alpha",
         type=float,
@@ -462,8 +454,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    args.model_id = args.model_id+"-temperature-"+str(args.temperature)+"-posterior_threshold-"+str(args.posterior_threshold)+"-posterior_alpha-"+str(args.posterior_alpha)
-    
+    args.model_id = f"{args.model_id}-temperature-{str(args.temperature)}-posterior_threshold-{str(args.posterior_threshold)}-posterior_alpha-{str(args.posterior_alpha)}"
+
     if args.num_gpus_total // args.num_gpus_per_model > 1:
         import ray
 
